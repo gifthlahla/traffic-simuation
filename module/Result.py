@@ -4,81 +4,81 @@ import matplotlib.pyplot as plt
 import pygame
 import time
 import sys
-from scipy.integrate import odeint, cumtrapz
+from scipy.integrate import odeint, cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 
 class Presentation_Result(object):
-    def __init__(self, tiempo_simulacion: int):
+    def __init__(self, simulation_time: int):
         """
-            Inicializa la clase `Presentation_Result` con el tiempo de simulación.
+            Initializes the `Presentation_Result` class with the simulation time.
 
             Args:
-                tiempo_simulacion (int): Tiempo de simulación en segundos
+                simulation_time (int): Simulation time in seconds
         """
-        self.time = tiempo_simulacion
-        self.figures = []  # Lista para almacenar las figuras y ejes
-        self.vehiculos: dict[str, dict[str, float]] = {
+        self.time = simulation_time
+        self.figures = []  # List to store figures and axes
+        self.vehicles: dict[str, dict[str, float]] = {
             "car": {
-                "masa": 1.814,
-                "amortiguamiento": 50,
-                "resorte": 10.0,
-                "posicion": 1,
-                "velocidad": 2.25,
+                "mass": 1.814,
+                "damping": 50,
+                "spring": 10.0,
+                "position": 1,
+                "velocity": 2.25,
             },
             "bus": {
-                "masa": 9.071,
-                "amortiguamiento": 100,
-                "resorte": 20.0,
-                "posicion": 1,
-                "velocidad": 1.8,
+                "mass": 9.071,
+                "damping": 100,
+                "spring": 20.0,
+                "position": 1,
+                "velocity": 1.8,
             },
             "truck": {
-                "masa": 3.629,
-                "amortiguamiento": 150,
-                "resorte": 30.0,
-                "posicion": 1,
-                "velocidad": 1.8,
+                "mass": 3.629,
+                "damping": 150,
+                "spring": 30.0,
+                "position": 1,
+                "velocity": 1.8,
             },
             "bike": {
-                "masa": 250,
-                "amortiguamiento": 30,
-                "resorte": 5000,
-                "posicion": 1,
-                "velocidad": 2.5,
+                "mass": 250,
+                "damping": 30,
+                "spring": 5000,
+                "position": 1,
+                "velocity": 2.5,
             },
         }
 
     def show_all_plots(self):
         """
-            Muestra todas las figuras en una sola ventana.
+            Displays all figures in a single window.
         """
-        # Calcular el número de filas y columnas necesarias
+        # Calculate the necessary number of rows and columns
         num_plots = len(self.figures)
-        # Puedes ajustar esto según sea necesario
+        # You can adjust this as needed
         num_cols = int(len(self.figures)/4)
         num_rows = num_plots // num_cols
         if num_plots % num_cols:
             num_rows += 1
 
-        # Crear una cuadrícula de subgráficos
-        # Ajusta el tamaño de la figura según sea necesario
+        # Create a grid of subplots
+        # Adjust figure size as needed
         fig, axs = plt.subplots(num_rows, num_cols, figsize=(13, 8))
 
-        # Añadir cada figura a la cuadrícula
+        # Add each figure to the grid
         for i, ax in enumerate(self.figures):
-            # Calcular la posición en la cuadrícula
+            # Calculate grid position
             row = i // num_cols
             col = i % num_cols
 
-            # Añadir la figura a la cuadrícula
+            # Add the figure to the grid
             for line in ax.lines:
-                # Crear una copia de la línea
+                # Create a copy of the line
                 line_copy = line.__class__(line.get_xdata(), line.get_ydata(), color=line.get_color(
                 ), linestyle=line.get_linestyle(), linewidth=line.get_linewidth())
                 axs[row, col].add_line(line_copy)
             for patch in ax.patches:
-                # Crear una copia del parche
+                # Create a copy of the patch
                 patch_copy = matplotlib.patches.Rectangle((patch.get_x(), patch.get_y(
                 )), patch.get_width(), patch.get_height(), fill=True, color=patch.get_facecolor())
                 axs[row, col].add_patch(patch_copy)
@@ -91,29 +91,35 @@ class Presentation_Result(object):
             # # Reducir el tamaño de la fuente de los ejes
             # axs[row, col].tick_params(axis='both', which='major', labelsize=4)
 
-        # Ajustar el layout para que los gráficos no se solapen
+        # Adjust layout so plots don't overlap
         plt.tight_layout()
-        # Maximizar la ventana de la figura
+        # Maximize figure window
         mng = plt.get_current_fig_manager()
-        mng.window.showMaximized()
+        try:
+            mng.window.state('zoomed') # TkAgg backend
+        except Exception:
+            try:
+                mng.window.showMaximized() # Qt backend
+            except Exception:
+                fig.set_size_inches(16, 9) # Fallback
         plt.savefig('graphs/all_plots.png')
-        # Mostrar la figura con todos los gráficos
+        # Show the figure with all plots
         plt.close(fig)
-        # Iniciar Pygame
+        # Initialize Pygame
         pygame.init()
 
-        # Cargar la imagen guardada
+        # Load saved image
         image = pygame.image.load('graphs/all_plots.png')
 
-        # Crear una ventana del tamaño de la imagen
+        # Create a window the size of the image
         screen = pygame.display.set_mode(
             (image.get_width(), image.get_height()))
 
-        # Mostrar la imagen
+        # Display image
         screen.blit(image, (0, 0))
         pygame.display.flip()
 
-        # Mantener la ventana abierta hasta que se cierre
+        # Keep window open until closed
         running = True
         while running:
             for event in pygame.event.get():
@@ -122,18 +128,19 @@ class Presentation_Result(object):
                     sys.exit()
         pygame.quit()
 
-    def model_trafic(self, position_lider: float = 50, position_seguidor: float = 40, velocity_lider: float = 30, velocity_seguidor: float = 20):
+    def traffic_model(self, position_leader: float = 50, position_follower: float = 40, velocity_leader: float = 30, velocity_follower: float = 20):
         """
-            La función `model_trafic` simula el modelo de tráfico FVADM y traza la velocidad del vehículo seguidor en función del tiempo.
+            The `model_trafic` function simulates the FVADM traffic model and plots the 
+            follower vehicle speed versus time.
 
             Args:
-                position_lider (float): Posición del vehículo líder
-                position_seguidor (float): Posición del vehículo seguidor
-                velocity_lider (float): Velocidad del vehículo líder
-                velocity_seguidor (float): Velocidad del vehículo seguidor
+                position_leader (float): Leader vehicle position
+                position_follower (float): Follower vehicle position
+                velocity_leader (float): Leader vehicle speed
+                velocity_follower (float): Follower vehicle speed
         """
 
-        # Parámetros del modelo FVADM
+        # FVADM model parameters
         k = 0.1  # Parámetro k
         V1 = 10  # Parámetro V1
         V2 = 20  # Parámetro V2
@@ -142,388 +149,388 @@ class Presentation_Result(object):
         lambda_ = 0.5  # Parámetro lambda
         gamma = 0.1  # Parámetro gamma
 
-        # Posiciones de los vehículos
-        x_l = position_lider  # Posición del vehículo líder
-        x = position_seguidor  # Posición del vehículo seguidor
-        l = 25  # Distancia entre vehículos
-        v_l = velocity_lider  # Velocidad del vehículo líder
-        v = velocity_seguidor  # Velocidad del vehículo seguidor
-        a = 1.5  # Aceleración del vehículo
+        # Vehicle positions
+        x_l = position_leader  # Leader vehicle position
+        x = position_follower  # Follower vehicle position
+        l = 25  # Distance between vehicles
+        v_l = velocity_leader  # Leader vehicle speed
+        v = velocity_follower  # Follower vehicle speed
+        a = 1.5  # Vehicle acceleration
 
-        # Función que define la ecuación diferencial FVADM
+        # Function defining the FVADM differential equation
         def modelo_FVADM(v, _):
             return k * (V1 + V2 * np.tanh((C1 * (x_l - x - l)) / C2) - v) + lambda_ * (v_l - v) + gamma * a
 
-        # Tiempo de simulación
+        # Simulation time
         t = np.linspace(0, self.time, 1000)
 
-        # Resolviendo la ecuación diferencial
-        solucion = odeint(modelo_FVADM, v, t)
-        # Crear la figura y los ejes
+        # Solving the differential equation
+        solution = odeint(modelo_FVADM, v, t)
+        # Create figure and axes
         #         ax = plt.Axes(fig=plt.figure(), rect=[0,0,1,1])
 
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
-        # Graficando la solución
-        ax.plot(t, solucion)
-        ax.set_xlabel('Tiempo')
-        ax.set_ylabel('Velocidad del vehículo seguidor')
+        # Plotting the solution
+        ax.plot(t, solution)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Follower vehicle speed')
         ax.set_title(
-            'Modelo Full Velocity \n and Acceleration Difference Model')
+            'Full Velocity \n and Acceleration Difference Model')
         self.figures.append(ax)
 
-    def calculo_raices(self, N_vehiculos: int = 220):
+    def root_calculation(self, num_vehicles: int = 220):
         """
-        La función `calculo_raices` calcula la raíz de la ecuación Q^2 - C = 0 utilizando el método de Newton-Raphson.
+        The `calculo_raices` function calculates the root of the equation Q^2 - C = 0 
+        using the Newton-Raphson method.
 
         Args:
-            N_vehiculos (int): Número de vehículos en el tráfico
+            num_vehicles (int): Number of vehicles in traffic
 
         """
-        # Constante relacionada con el flujo de tráfico
+        # Constant related to traffic flow
         C = 75000
-        # valor inicial para el flujo de tráfico
-        Q0 = N_vehiculos
-        # Tolerancia para la convergencia
+        # Initial value for traffic flow
+        Q0 = num_vehicles
+        # Tolerance for convergence
         tolerancia = 1e-6
-        # Número máximo de iteraciones
+        # Maximum number of iterations
         maxIter = 100
         iter = 0
         Q = Q0
 
         while True:
-            # Calculamos el siguiente valor de Q usando la fórmula de Newton-Raphson
+            # Calculate the next value of Q using the Newton-Raphson formula
             Qnext = Q - (Q**2 - C) / (2*Q)
-            # Si la diferencia entre Qnext y Q es menor que la tolerancia, terminamos el bucle
+            # If the difference between Qnext and Q is less than tolerance, end loop
             if abs(Qnext - Q) < tolerancia:
                 break
-            # Actualizamos el valor de Q
+            # Update Q value
             Q = Qnext
-            # Incrementamos el contador de iteraciones
+            # Increment iteration counter
             iter = iter + 1
-            # Si hemos excedido el número máximo de iteraciones, terminamos el bucle
+            # If maximum iterations exceeded, end loop
             if iter > maxIter:
-                print('Se excedio el numero maximo de iteraciones')
+                print('Maximum number of iterations exceeded')
                 break
 
-        # Imprimimos la raíz encontrada y el número de iteraciones
-        print('la raiz encontrada es:', Q)
-        print('numero de iteraciones:', iter)
+        # Print found root and iteration count
+        print('Found root:', Q)
+        print('Iteration count:', iter)
 
-        # Definimos la función f(Q)
+        # Define function f(Q)
         def f(Q): return Q**2 - C
 
-        # Generamos un conjunto de valores de Q para graficar
+        # Generate a set of Q values for plotting
         Q_vals = np.linspace(0, self.time, 400)
         # Crear los ejes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
-        # Graficamos f(Q) en función de Q
+        # Plot f(Q) vs Q
         ax.plot(Q_vals, f(Q_vals))
-        # Marcamos la raíz encontrada en el gráfico
+        # Mark found root on plot
         ax.plot(Q, f(Q), 'ro')
-        # Etiquetamos los ejes y el título del gráfico
-        ax.set_xlabel('flujo de trafico (Q)')
+        # Label axes and plot title
+        ax.set_xlabel('traffic flow (Q)')
         ax.set_ylabel('f(Q)')
         ax.set_title(
-            'Metodo de Newton-Raphson \n para el calculo del trafico vehicular')
-        # Activamos la cuadrícula del gráfico
+            'Newton-Raphson Method \n for vehicle traffic calculation')
+        # Enable plot grid
         ax.grid(True)
-        # Mostramos el gráfico
+        # Show plot
         self.figures.append(ax)
 
-    def ajuste_curvas(self,N_vehiculos: int = 220):
+    def curve_fitting(self, num_vehicles: int = 220):
         """
-        La función `ajuste_curvas` realiza una regresión lineal sobre los datos de tráfico y traza los
-        resultados.
+        The `ajuste_curvas` function performs linear regression on traffic data and plots 
+        the results.
 
         Args:
-            N_vehiculos (int): Número de vehículos en el tráfico
+            num_vehicles (int): Number of vehicles in traffic
         """
         
-        # Datos: hora del dia y trafico vehicular
+        # Data: time of day and vehicle traffic
         horas_dia = np.linspace(0, self.time, 7)
 
-        trafico = np.linspace(0, N_vehiculos, 7)
+        trafico = np.linspace(0, num_vehicles, 7)
 
-        # modelo de regresion lineal
+        # linear regression model
         coeficientes = np.polyfit(horas_dia, trafico, 1)
 
-        # predicciones
+        # predictions
         horas_prediccion = np.linspace(horas_dia[0], horas_dia[-1], 100)
         trafico_predicho = np.polyval(coeficientes, horas_prediccion)
 
         # Crear los ejes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
-        # Graficar
+        # Plot
         ax.plot(horas_dia, trafico, 'o', markersize=10)
         ax.plot(horas_prediccion, trafico_predicho, '-r',
-                linewidth=2)  # Graficar la linea de regresión
-        ax.set_xlabel('hora del dia')
-        ax.set_ylabel('Tráfico vehicular')
-        ax.set_title('Regresión lineal de tráfico vehicular')
-        ax.legend(['Datos', 'Linea de regresion'],
+                linewidth=2)  # Plot regression line
+        ax.set_xlabel('time of day')
+        ax.set_ylabel('Vehicle traffic')
+        ax.set_title('Linear regression of vehicle traffic')
+        ax.legend(['Data', 'Regression line'],
                   loc='upper right')
         ax.grid(True)
 
         self.figures.append(ax)
 
-    def derivada_velocidad_aceleracion(self, speeds: list = [2.25, 1.8, 1.8, 2.5]):
+    def velocity_acceleration_derivative(self, speeds: list = [2.25, 1.8, 1.8, 2.5]):
 
         """
-            La función `derivada_velocidad_aceleracion` calcula la aceleración de un vehículo en un tiempo dado.
+            The `derivada_velocidad_aceleracion` function calculates vehicle acceleration at a given time.
 
             Args:
-                speeds (list): Lista de velocidades de los vehículos    
+                speeds (list): List of vehicle speeds    
         """
-        # Datos de tiempo y velocidad
+        # Time and speed data
         tiempo = np.linspace(0, self.time, 4)
-        # de m/s a km/s
+        # from m/s to km/s
         velocidad = np.array([speed * 50 for speed in speeds])
 
-        # Interpolación de la velocidad
+        # Speed interpolation
         tiempo_interp = np.arange(0, tiempo[-1], 0.1)
         f = interp1d(tiempo, velocidad, kind='cubic')
         velocidad_interp = f(tiempo_interp)
 
-        # Extrapolación de la velocidad
+        # Speed extrapolation
         tiempo_extrap = np.arange(0, velocidad[0], 0.1)
         f = interp1d(tiempo, velocidad, kind='cubic', fill_value="extrapolate")
         velocidad_extrap = f(tiempo_extrap)
 
-        # Cálculo de la aceleración como la derivada de la velocidad
+        # Acceleration calculation as velocity derivative
         aceleracion_interp = np.diff(velocidad_interp) / np.diff(tiempo_interp)
         aceleracion_extrap = np.diff(velocidad_extrap) / np.diff(tiempo_extrap)
 
         # Crear la figura y los ejes
         fig, axs = plt.subplots(2, 1)
 
-        # Gráficos
+        # Plots
         axs[0].plot(tiempo, velocidad, 'o', tiempo_interp,
                     velocidad_interp, '-', tiempo_extrap, velocidad_extrap, '--')
-        axs[0].set_title('Velocidad vs. Tiempo')
-        axs[0].set_xlabel('Tiempo (s)')
-        axs[0].set_ylabel('Velocidad (m/s)')
-        axs[0].legend(['Datos', 'Interpolación', 'Extrapolación'])
+        axs[0].set_title('Speed vs. Time')
+        axs[0].set_xlabel('Time (s)')
+        axs[0].set_ylabel('Speed (m/s)')
+        axs[0].legend(['Data', 'Interpolation', 'Extrapolation'])
 
         axs[1].plot(tiempo_interp[:-1], aceleracion_interp,
                     '-', tiempo_extrap[:-1], aceleracion_extrap, '--')
-        axs[1].set_title('Aceleración vs. Tiempo')
-        axs[1].set_xlabel('Tiempo (s)')
-        axs[1].set_ylabel('Aceleración (m/s^2)')
-        axs[1].legend(['Interpolación', 'Extrapolación'])
+        axs[1].set_title('Acceleration vs. Time')
+        axs[1].set_xlabel('Time (s)')
+        axs[1].set_ylabel('Acceleration (m/s^2)')
+        axs[1].legend(['Interpolation', 'Extrapolation'])
 
         fig.tight_layout()
         # Aplanar axs y agregar cada objeto AxesSubplot a self.figures
         for ax in np.ravel(axs):
             self.figures.append(ax)
 
-    def Acumulacion_integrales(self, vehicleClass: str = "car"):
+    def integral_accumulation(self, vehicleClass: str = "car"):
         """
-            La función `Acumulacion_integrales` simula el desplazamiento y la velocidad de dos vehículos en un tiempo dado.
+            The `Acumulacion_integrales` function simulates displacement and velocity of two vehicles at a given time.
 
             Args:
-                vehicleClass (str): Clase del vehículo a simular
+                vehicleClass (str): Vehicle class to simulate
         """
-        # Rango de tiempo
+        # Time range
         t = np.arange(0, self.time, 0.1)
 
-        velocidad_vehiculo = self.vehiculos[vehicleClass]["velocidad"]
-        # Velocidad de los vehículos A y B
-        v_A = velocidad_vehiculo*t
-        v_B = velocidad_vehiculo*t + 4
+        vehicle_velocity = self.vehicles[vehicleClass]["velocity"]
+        # Velocity of vehicles A and B
+        v_A = vehicle_velocity*t
+        v_B = vehicle_velocity*t + 4
 
-        # Desplazamiento utilizando integración numérica
-        s_A = cumtrapz(v_A, t, initial=0)
-        s_B = cumtrapz(v_B, t, initial=0)
-        # Crear la figura y los ejes
+        # Displacement using numerical integration
+        s_A = cumulative_trapezoid(v_A, t, initial=0)
+        s_B = cumulative_trapezoid(v_B, t, initial=0)
+        # Create figure and axes
         fig, axs = plt.subplots(2, 1)
 
-        # Graficar Velocidad vs. Tiempo
+        # Plot Velocity vs. Time
         axs[0].plot(t, v_A, 'b-', t, v_B, 'r--')
-        axs[0].legend(['Velocidad A', 'Velocidad B'])
-        axs[0].set_title('Velocidad vs. Tiempo')
-        axs[0].set_xlabel('Tiempo (s)')
-        axs[0].set_ylabel('Velocidad (m/s)')
+        axs[0].legend(['Velocity A', 'Velocity B'])
+        axs[0].set_title('Velocity vs. Time')
+        axs[0].set_xlabel('Time (s)')
+        axs[0].set_ylabel('Velocity (m/s)')
 
-        # Graficar Desplazamiento vs. Tiempo
+        # Plot Displacement vs. Time
         axs[1].plot(t, s_A, 'b-', t, s_B, 'r--')
 
-        axs[1].legend(['Desplazamiento A', 'Desplazamiento B'])
-        axs[1].set_title('Desplazamiento vs. Tiempo')
-        axs[1].set_xlabel('Tiempo (s)')
-        axs[1].set_ylabel('Desplazamiento (m)')
+        axs[1].legend(['Displacement A', 'Displacement B'])
+        axs[1].set_title('Displacement vs. Time')
+        axs[1].set_xlabel('Time (s)')
+        axs[1].set_ylabel('Displacement (m)')
 
         fig.tight_layout()
-        # Aplanar axs y agregar cada objeto AxesSubplot a self.figures
+        # Flatten axs and add each AxesSubplot object to self.figures
         for ax in np.ravel(axs):
             self.figures.append(ax)
 
-    def Trazado_trayectorias(self, vehiculo1: tuple[float, float, float] = (0, 0, 3), vehiculo2: tuple[float, float, float] = (0, 0, 1.5)):
+    def trajectory_plotting(self, vehicle1: tuple[float, float, float] = (0, 0, 3), vehicle2: tuple[float, float, float] = (0, 0, 1.5)):
         """
-            La función `Trazado_trayectorias` simula la trayectoria de dos vehículos en un tiempo dado.
+            The `Trazado_trayectorias` function simulates the trajectory of two vehicles at a given time.
 
             Args:
-                vehiculo1 (tuple): Posición, velocidad y aceleración del vehículo 1
-                vehiculo2 (tuple): Posición, velocidad y aceleración del vehículo 2
+                vehicle1 (tuple): Position, speed, and acceleration of vehicle 1
+                vehicle2 (tuple): Position, speed, and acceleration of vehicle 2
         """
 
-        tiempo_final = self.time  # segundos
+        final_time = self.time  # seconds
         dt = 0.1
-        # condiciones iniciales para el vehiculo1
+        # initial conditions for vehicle 1
+        position1, velocity1, acceleration1 = vehicle1
 
-        posicion1, velocidad1, aceleracion1 = vehiculo1
-
-        # condiciones iniciales para el vehiculo2
-        posicion2, velocidad2, aceleracion2 = vehiculo2
-        # Crear la figura y los ejes
+        # initial conditions for vehicle 2
+        position2, velocity2, acceleration2 = vehicle2
+        # Create figure and axes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
 
-        # Preparacion de la figura para la simulacion
+        # Figure preparation for simulation
 
         ax.grid(True)
-        ax.set_xlabel('tiempo (s)')
-        ax.set_ylabel('Posicion (m)')
+        ax.set_xlabel('time (s)')
+        ax.set_ylabel('Position (m)')
 
-        # Listas para almacenar las posiciones y tiempos
-        tiempos = []
-        posiciones1 = []
-        posiciones2 = []
+        # Lists to store positions and times
+        times = []
+        positions1 = []
+        positions2 = []
 
-        # for simulacion
-        for t in np.arange(0, tiempo_final+dt, dt):
-            # Actualizar Posiciones y Velocidades
-            posicion1 = posicion1 + velocidad1 * dt
-            velocidad1 = velocidad1 + aceleracion1 * dt
+        # for simulation
+        for t in np.arange(0, final_time+dt, dt):
+            # Update Positions and Velocities
+            position1 = position1 + velocity1 * dt
+            velocity1 = velocity1 + acceleration1 * dt
 
-            posicion2 = posicion2 + velocidad2 * dt
-            velocidad2 = velocidad2 + aceleracion2 * dt
+            position2 = position2 + velocity2 * dt
+            velocity2 = velocity2 + acceleration2 * dt
 
-            # Almacenar los tiempos y posiciones
-            tiempos.append(t)
-            posiciones1.append(posicion1)
-            posiciones2.append(posicion2)
+            # Store times and positions
+            times.append(t)
+            positions1.append(position1)
+            positions2.append(position2)
 
-        # Graficar
-        ax.plot(tiempos, posiciones1, 'r-')
-        ax.plot(tiempos, posiciones2, 'b-')
+        # Plot
+        ax.plot(times, positions1, 'r-')
+        ax.plot(times, positions2, 'b-')
 
-        ax.set_title('Trayectoria de dos vehiculos')
-        ax.legend(['Vehiculo 1', 'Vehiculo 2'])
+        ax.set_title('Trajectory of two vehicles')
+        ax.legend(['Vehicle 1', 'Vehicle 2'])
         self.figures.append(ax)
 
-    def Trapecio(self, vehiculeClass: str = "car"):
+    def trapezoid(self, vehicle_class: str = "car"):
         """
-            La función `Trapecio` calcula el desplazamiento y la distancia total recorrida por un vehículo en un tiempo dado.
+            The `Trapecio` function calculates displacement and total distance traveled by a vehicle at a given time.
 
             Args:
-                vehiculeClass (str): Clase del vehículo a simular
+                vehicle_class (str): Vehicle class to simulate
         """
-        # Definir el tiempo de 0 a 300 segundos
+        # Define time from 0 to 300 seconds
         t = np.arange(0, self.time, 0.1)
 
-        # Velocidad del vehículo
-        velocidad_vehiculo = self.vehiculos[vehiculeClass]["velocidad"]
+        # Vehicle speed
+        velocity_vehicle = self.vehicles[vehicle_class]["velocity"]
 
-        # Definir la función de velocidad en m/s
-        v = velocidad_vehiculo*t - 2
+        # Define velocity function in m/s
+        v = velocity_vehicle*t - 2
 
-        # Desplazamiento
-        desplazamiento = np.trapz(v, t) / 1000  # km
+        # Displacement
+        displacement = np.trapezoid(v, t) / 1000  # km
 
-        # Velocidad absoluta
+        # Absolute speed
         v_abs = np.abs(v)
 
-        # Distancia total
-        distancia_total = np.trapz(v_abs, t) / 1000  # km
+        # Total distance
+        total_distance = np.trapezoid(v_abs, t) / 1000  # km
 
-        # Crear gráfico de barras
-        labels = ['Desplazamiento', 'Distancia Total Recorrida']
-        values = [desplazamiento, distancia_total]
-        # Crear la figura y los ejes
+        # Create bar chart
+        labels = ['Displacement', 'Total Distance Traveled']
+        values = [displacement, total_distance]
+        # Create figure and axes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
 
         ax.bar(labels, values)
-        ax.set_ylabel('Kilómetros')
-        ax.set_title('Desplazamiento y Distancia Total Recorrida')
+        ax.set_ylabel('Kilometers')
+        ax.set_title('Displacement and Total Distance Traveled')
         self.figures.append(ax)
 
-    def Masa_amortiguador(self, vehicleClass: str = "car"):
+    def mass_damper(self, vehicleClass: str = "car"):
         """
-            La función `Masa_amortiguador` simula el comportamiento de un sistema masa-resorte-amortiguador.
+            The `Masa_amortiguador` function simulates the behavior of a mass-spring-damper system.
 
             Args:
-                vehicleClass (str): Clase del vehículo a simular
+                vehicleClass (str): Vehicle class to simulate
         """
 
-        masa = self.vehiculos[vehicleClass]["masa"]
-        amortiguamiento = self.vehiculos[vehicleClass]["amortiguamiento"]
-        resorte = self.vehiculos[vehicleClass]["resorte"]
-        posicion = self.vehiculos[vehicleClass]["posicion"]
-        velocidad = self.vehiculos[vehicleClass]["velocidad"]
-        # parametros del sistema
-        m = masa  # masa (kg)
-        b = amortiguamiento  # coeficiente de amortiguamiento (Ns/m)
-        k = resorte  # constante del resorte (N/m)
+        mass = self.vehicles[vehicleClass]["mass"]
+        damping = self.vehicles[vehicleClass]["damping"]
+        spring = self.vehicles[vehicleClass]["spring"]
+        position = self.vehicles[vehicleClass]["position"]
+        velocity = self.vehicles[vehicleClass]["velocity"]
+        # system parameters
+        m = mass  # mass (kg)
+        b = damping  # damping coefficient (Ns/m)
+        k = spring  # spring constant (N/m)
 
-        # Condiciones Iniciales
-        x0 = posicion  # posicion inicial
-        v0 = velocidad  # Velocidad inicial (m/s)
+        # Initial Conditions
+        x0 = position  # initial position
+        v0 = velocity  # Initial velocity (m/s)
 
-        # Tiempo de Simulacion
-        t = np.linspace(0, self.time, 1000)  # desde t=0 hasta t=10
+        # Simulation Time
+        t = np.linspace(0, self.time, 1000)  # from t=0 to t=10
 
-        # Definicion de las ecuaciones de movimiento
+        # Definition of motion equations
         def ode(y, t, b, k, m):
             x, v = y
             dydt = [v, -(b/m) * v + -(k/m) * x]
             return dydt
 
-        # Resolucion de las ecuaciones de movimiento
+        # Solving motion equations
         y0 = [x0, v0]
         sol = odeint(ode, y0, t, args=(b, k, m))
-        # Crear la figura y los ejes
+        # Create figure and axes
         fig, axs = plt.subplots(2, 1)
 
-        # Visualizacion de la posicion en funcion del tiempo
+        # Visualization of position vs time
         axs[0].plot(t, sol[:, 0], 'b', linewidth=2)
-        axs[0].set_xlabel('Tiempo (s)')
-        axs[0].set_ylabel('Posicion (m)')
+        axs[0].set_xlabel('Time (s)')
+        axs[0].set_ylabel('Position (m)')
         axs[0].set_title(
-            "Posicion vs Tiempo del Sistema \n Masa-Resorte-Amortiguador")
+            "Position vs Time of the \n Mass-Spring-Damper System")
 
-        # Visualizacion de la velocidad en funcion del tiempo
+        # Visualization of velocity vs time
         axs[1].plot(t, sol[:, 1], 'b', linewidth=2)
-        axs[1].set_xlabel('Tiempo (s)')
-        axs[1].set_ylabel('Velocidad (m/s)')
+        axs[1].set_xlabel('Time (s)')
+        axs[1].set_ylabel('Velocity (m/s)')
         axs[1].set_title(
-            "Velocidad vs Tiempo del Sistema \n Masa-Resorte-Amortiguador")
+            "Velocity vs Time of the \n Mass-Spring-Damper System")
 
         fig.tight_layout()
-        # Aplanar axs y agregar cada objeto AxesSubplot a self.figures
+        # Flatten axs and add each AxesSubplot object to self.figures
         for ax in np.ravel(axs):
             self.figures.append(ax)
 
-    def analogia_masa_amortiguador(self, vehicleClass: str = "car"):
+    def mass_damper_analogy(self, vehicleClass: str = "car"):
         """
-            La función `analogia_masa_amortiguador` simula el comportamiento de un vehículo siguiendo la analogía de masa-amortiguador.
+            The `analogia_masa_amortiguador` function simulates vehicle behavior following the mass-damper analogy.
 
             Args:
-                vehicleClass (str): Clase del vehículo a simular
+                vehicleClass (str): Vehicle class to simulate
         """
-        masa = self.vehiculos[vehicleClass]["masa"]
-        amortiguamiento = self.vehiculos[vehicleClass]["amortiguamiento"]
-        resorte = self.vehiculos[vehicleClass]["resorte"]
-        posicion = self.vehiculos[vehicleClass]["posicion"]
-        velocidad = self.vehiculos[vehicleClass]["velocidad"]
-        # Parámetros del sistema
-        m = masa  # masa (kg)
-        c = amortiguamiento  # coeficiente de amortiguamiento (Ns/m)
-        k = resorte  # constante del resorte (N/m)
+        mass = self.vehicles[vehicleClass]["mass"]
+        damping = self.vehicles[vehicleClass]["damping"]
+        spring = self.vehicles[vehicleClass]["spring"]
+        position = self.vehicles[vehicleClass]["position"]
+        velocity = self.vehicles[vehicleClass]["velocity"]
+        # System parameters
+        m = mass  # mass (kg)
+        c = damping  # damping coefficient (Ns/m)
+        k = spring  # spring constant (N/m)
 
-        # Condiciones iniciales
-        x0 = posicion  # posición inicial
-        v0 = velocidad  # velocidad inicial (m/s)
+        # Initial conditions
+        x0 = position  # initial position
+        v0 = velocity  # initial velocity (m/s)
 
-        # Definición de las ecuaciones de movimiento
+        # Definition of motion equations
         def vehicle_dynamics(x, t, m, c, k):
             dxdt = np.zeros(2)
             dxdt[0] = x[1]
@@ -533,88 +540,89 @@ class Presentation_Result(object):
 
             return dxdt
 
-        # Resolución de las ecuaciones de movimiento
+        # Solving motion equations
         y0 = [x0, v0]
         t = np.linspace(0, self.time, 1000)
         sol = odeint(vehicle_dynamics, y0, t, args=(
             m, c, k), atol=1e-9, rtol=1e-6)
-        # Crear la figura y los ejes
-        fig, axs = plt.subplots(2, 1)
+        # Create figure and axes
+        fig = plt.figure()
+        
+        plt.subplot(2,1,1)
+        plt.plot(t, sol[:, 0])
+        plt.title('Follower vehicle Position')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Position (m)')
 
-        # Visualización de la posición en función del tiempo
-        axs[0].plot(t, sol[:, 0])
-        axs[0].set_title('Posicion del vehiculo Seguidor')
-        axs[0].set_xlabel('Tiempo (s)')
-        axs[0].set_ylabel('Posicion (m)')
-
-        # Visualización de la velocidad en función del tiempo
-        axs[1].plot(t, sol[:, 1])
-        axs[1].set_title('Velocidad del vehiculo Seguidor')
-        axs[1].set_xlabel('Tiempo (s)')
-        axs[1].set_ylabel('Velocidad (m/s)')
+        # Visualization of velocity vs time
+        plt.subplot(2,1,2)
+        plt.plot(t, sol[:, 1])
+        plt.title('Follower vehicle Speed')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Velocity (m/s)')
 
         fig.tight_layout()
-        # Aplanar axs y agregar cada objeto AxesSubplot a self.figures
-        for ax in np.ravel(axs):
+        # Flatten axs and add each AxesSubplot object to self.figures
+        for ax in fig.axes:
             self.figures.append(ax)
 
-    def Teorias_colas_simples(self, Numero_vehiculos: int = 10):
+    def simple_queue_theories(self, num_vehicles: int = 10):
         """
-            La función `Teorias_colas_simples` calcula la distribución de probabilidad del número de vehículos 
-            en un sistema de colas con un solo servidor.
+            The `Teorias_colas_simples` function calculates the probability distribution of the number of vehicles 
+            in a single-server queuing system.
             
             Args:
-                Numero_vehiculos (int): Número de vehículos en el sistema
+                num_vehicles (int): Number of vehicles in the system
         """
-        # Parámetros del sistema
-        _lambda = 4  # Tasa de llegada de vehículos
-        mu = 5  # Tasa de servicio
-        k = Numero_vehiculos  # Número máximo de vehículos en el sistema
+        # System parameters
+        _lambda = 4  # Vehicle arrival rate
+        mu = 5  # Service rate
+        k = num_vehicles  # Maximum number of vehicles in the system
 
-        # Probabilidad de que el sistema esté en estado i
+        # Probability that the system is in state i
         pi = np.zeros(k+1)
         pi[0] = 1
         for i in range(1, k+1):
             pi[i] = (_lambda/mu)**i * pi[0]
         pi[0] = 1 / np.sum(pi)
 
-        # Número promedio de vehículos en el sistema
+        # Average number of vehicles in the system
         L = np.sum(pi * np.arange(0, k+1))
 
-        # Probabilidad de que un vehículo que llega tenga que esperar
+        # Probability that an arriving vehicle has to wait
         P_wait = 1 - pi[0]
-        # Crear la figura y los ejes
+        # Create figure and axes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
 
-        # Gráfico de la distribución de probabilidad
+        # Plot of probability distribution
 
         ax.bar(np.arange(0, k+1), pi)
-        ax.set_xlabel('Número de vehículos en el sistema')
-        ax.set_ylabel('Probabilidad')
+        ax.set_xlabel('Number of vehicles in the system')
+        ax.set_ylabel('Probability')
         ax.set_title(
-            'Distribución de probabilidad \n del número de vehículos en el sistema')
+            'Probability distribution \n of the number of vehicles in the system')
         self.figures.append(ax)
 
-        # Imprimir estadísticas
-        print(f'Número promedio de vehículos en el sistema: {L:.2f}')
+        # Print statistics
+        print(f'Average number of vehicles in the system: {L:.2f}')
         print(
-            f'Probabilidad de que un vehículo que llega tenga que esperar: {P_wait:.2f}')
+            f'Probability that an arriving vehicle has to wait: {P_wait:.2f}')
 
-    def Teorias_colas_multiples(self, Numero_vehiculos: int = 10):
+    def multiple_queue_theories(self, num_vehicles: int = 10):
         """
-            La función `Teorias_colas_multiples` calcula la distribución de probabilidad del número de vehículos 
-            en un sistema de colas con múltiples servidores.
+            The `Teorias_colas_multiples` function calculates the probability distribution of the number of vehicles 
+            in a multi-server queuing system.
             
             Args:
-                Numero_vehiculos (int): Número de vehículos en el sistema
+                num_vehicles (int): Number of vehicles in the system
         """
-        # Parámetros del sistema
-        _lambda = 6  # Tasa de llegada de vehículos
-        mu = 5  # Tasa de servicio
-        c = 4  # Número de servidores
-        K = Numero_vehiculos  # Número máximo de vehículos en el sistema
+        # System parameters
+        _lambda = 6  # Vehicle arrival rate
+        mu = 5  # Service rate
+        c = 4  # Number of servers
+        K = num_vehicles  # Maximum number of vehicles in the system
 
-        # Probabilidad de que el sistema esté en estado i
+        # Probability that the system is in state i
         pi = np.zeros(K+1)
         pi[0] = 1
         for i in range(1, c+1):
@@ -623,109 +631,109 @@ class Presentation_Result(object):
             pi[i] = (_lambda/(c*mu))**i * pi[0]
         pi[0] = 1 / np.sum(pi)
 
-        # Número promedio de vehículos en el sistema
+        # Average number of vehicles in the system
         L = np.sum(pi * np.arange(0, K+1))
 
-        # Probabilidad de que un vehículo que llega tenga que esperar
+        # Probability that an arriving vehicle has to wait
         P_wait = 1 - np.sum(pi[:c+1])
-        # Crear la figura y los ejes
+        # Create figure and axes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
 
-        # Gráfico de la distribución de probabilidad
+        # Plot of probability distribution
 
         ax.bar(np.arange(0, K+1), pi)
-        ax.set_xlabel('Número de vehículos en el sistema')
-        ax.set_ylabel('Probabilidad')
+        ax.set_xlabel('Number of vehicles in the system')
+        ax.set_ylabel('Probability')
         ax.set_title(
-            'Distribución de probabilidad  \ndel número de vehículos en el sistema')
+            'Probability distribution \n of the number of vehicles in the system')
         self.figures.append(ax)
 
-        # Imprimir estadísticas
-        print(f'Número promedio de vehículos en el sistema: {L:.2f}')
+        # Print statistics
+        print(f'Average number of vehicles in the system: {L:.2f}')
         print(
-            f'Probabilidad de que un vehículo que llega tenga que esperar: {P_wait:.2f}')
+            f'Probability that an arriving vehicle has to wait: {P_wait:.2f}')
 
-    def Monte_Carlo(self, simulaciones: int = 1000):
+    def bulawayo(self, simulations: int = 1000):
         """
-            La función `Monte_Carlo` simula un sistema de colas y calcula la distribución promedio del tiempo de
-            espera en función de parámetros específicos.
+            The `bulawayo` function simulates a queuing system and calculates the average waiting 
+            time distribution based on specific parameters.
 
             Args:
-                simulaciones (int): Número de simulaciones a realizar
+                simulations (int): Number of simulations to perform
         """
-        # Parámetros
-        lambda_ = 2  # media de tiempo entre llegadas, en minutos
-        mu = 1  # media de tiempo de servicio, en minutos
-        sigma = 0.5  # desviación estándar del tiempo de servicio en minutos
-        N = simulaciones  # número de simulaciones
+        # Parameters
+        lambda_ = 2  # average time between arrivals, in minutes
+        mu = 1  # average service time, in minutes
+        sigma = 0.5  # standard deviation of service time in minutes
+        N = simulations  # number of simulations
 
-        tiempo_espera = np.zeros(N)
+        waiting_time = np.zeros(N)
 
         for i in range(N):
-            llegadas = np.cumsum(np.random.exponential(
-                lambda_, 100))  # 100 vehículos
-            inicio_servicio = max(0, llegadas[0] - np.random.normal(mu, sigma))
-            fin_servicio = inicio_servicio + np.random.normal(mu, sigma)
-            espera = inicio_servicio - llegadas[0]
+            arrivals = np.cumsum(np.random.exponential(
+                lambda_, 100))  # 100 vehicles
+            service_start = max(0, arrivals[0] - np.random.normal(mu, sigma))
+            service_end = service_start + np.random.normal(mu, sigma)
+            waiting = service_start - arrivals[0]
 
-            for j in range(1, len(llegadas)):
-                inicio_servicio = max(fin_servicio, llegadas[j])
-                fin_servicio = inicio_servicio + np.random.normal(mu, sigma)
-                espera += inicio_servicio - llegadas[j]
+            for j in range(1, len(arrivals)):
+                service_start = max(service_end, arrivals[j])
+                service_end = service_start + np.random.normal(mu, sigma)
+                waiting += service_start - arrivals[j]
 
-            tiempo_espera[i] = espera / len(llegadas)
+            waiting_time[i] = waiting / len(arrivals)
 
-        media_espera = np.mean(tiempo_espera)
-        desviacion_espera = np.std(tiempo_espera)
-        # Crear la figura y los ejes
+        mean_waiting = np.mean(waiting_time)
+        waiting_deviation = np.std(waiting_time)
+        # Create figure and axes
         ax = plt.Axes(fig=plt.figure(), rect=[0, 0, 1, 1])
 
-        # Gráfico de los tiempos de espera
-        ax.hist(tiempo_espera, bins=20)
-        ax.set_xlabel('Tiempo Medio de espera (Minutos)')
-        ax.set_ylabel('Frecuencia')
+        # Plot of waiting times
+        ax.hist(waiting_time, bins=20)
+        ax.set_xlabel('Average Waiting Time (Minutes)')
+        ax.set_ylabel('Frequency')
         ax.set_title(
-            'Distribución del tiempo \n medio de espera en la interacción')
+            'Distribution of average \n waiting time in interaction')
         self.figures.append(ax)
 
 
-    def exec_all_plots(self, simulation_vehicle: list, lider: int, seguidor: int, speeds: dict, type_vehicle: str, simulationTime: int):
+    def exec_all_plots(self, simulation_vehicle: list, leader: int, follower: int, speeds: dict, type_vehicle: str, simulationTime: int):
         """
-        Ejecuta todos los gráficos
+        Executes all plots
 
         Args:
-            simulation_vehicle (list): Lista de vehiculos en la simulacion
-            lider (int): Indice del vehiculo lider
-            seguidor (int): Indice del vehiculo seguidor
-            speeds (dict): Velocidades de los vehiculos
-            type_vehicle (str): Tipo de vehiculo
-            simulationTime (int): Tiempo de simulacion
+            simulation_vehicle (list): List of vehicles in the simulation
+            leader (int): Leader vehicle index
+            follower (int): Follower vehicle index
+            speeds (dict): Vehicle speeds
+            type_vehicle (str): Vehicle type
+            simulationTime (int): Simulation time
             
         """
-        vehicule_lider = simulation_vehicle[lider]
-        vehicule_seguidor = simulation_vehicle[seguidor]
+        vehicle_leader = simulation_vehicle[leader]
+        vehicle_follower = simulation_vehicle[follower]
         time_execution = time.time()
-        self.model_trafic(
-            position_lider=vehicule_lider.x,
-            position_seguidor=vehicule_seguidor.x,
-            velocity_lider=vehicule_lider.speed,
-            velocity_seguidor=vehicule_seguidor.speed
+        self.traffic_model(
+            position_leader=vehicle_leader.x,
+            position_follower=vehicle_follower.x,
+            velocity_leader=vehicle_leader.speed,
+            velocity_follower=vehicle_follower.speed
         )
-        self.ajuste_curvas(N_vehiculos=220)
-        self.calculo_raices(N_vehiculos=220)
-        self.derivada_velocidad_aceleracion(speeds=list(speeds.values()))
-        self.Acumulacion_integrales(vehicleClass=type_vehicle)
-        self.Trazado_trayectorias(
-            vehiculo1=(vehicule_lider.x, vehicule_lider.speed, 1.5),
-            vehiculo2=(vehicule_seguidor.x, vehicule_seguidor.speed, 3)
+        self.curve_fitting(num_vehicles=220)
+        self.root_calculation(num_vehicles=220)
+        self.velocity_acceleration_derivative(speeds=list(speeds.values()))
+        self.integral_accumulation(vehicleClass=type_vehicle)
+        self.trajectory_plotting(
+            vehicle1=(vehicle_leader.x, vehicle_leader.speed, 1.5),
+            vehicle2=(vehicle_follower.x, vehicle_follower.speed, 3)
         )
-        self.Trapecio(vehiculeClass=type_vehicle)
-        self.Masa_amortiguador(vehicleClass=type_vehicle)
-        self.analogia_masa_amortiguador(vehicleClass=type_vehicle)
-        self.Teorias_colas_simples(Numero_vehiculos=220)
-        self.Teorias_colas_multiples(Numero_vehiculos=220)
-        self.Monte_Carlo(simulaciones=simulationTime)
-        print(f"Tiempo de ejecucion: {time.time() - time_execution} segundos")
+        self.trapezoid(vehicle_class=type_vehicle)
+        self.mass_damper(vehicleClass=type_vehicle)
+        self.mass_damper_analogy(vehicleClass=type_vehicle)
+        self.simple_queue_theories(num_vehicles=220)
+        self.multiple_queue_theories(num_vehicles=220)
+        self.bulawayo(simulations=simulationTime)
+        print(f"Execution time: {time.time() - time_execution} seconds")
         self.show_all_plots()
 
 
