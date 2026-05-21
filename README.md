@@ -1,8 +1,5 @@
 # Traffic_simulation_Model
 
-
-<img src="/images/output.gif" width="100%" height="100%">
-
 ## Description
 
 Vehicle traffic simulation model that resembles a macroscopic vehicle traffic simulation model. This model focuses on the simulation of the interaction between vehicles and traffic signals at an intersection, using a macroscopic approach to represent traffic behavior at the intersection level.
